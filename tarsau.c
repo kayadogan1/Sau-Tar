@@ -109,8 +109,15 @@ static int validate_ascii_text_file(const char *path, long long *size_out) {
 
 static int append_metadata(char **metadata, size_t *length, size_t *capacity, const InputFile *file) {
     char record[PATH_MAX + 64];
-    int written = snprintf(record, sizeof(record), "|%s,%04o,%lld|",
+    int written;
+
+    if (*length == 0) {
+        written = snprintf(record, sizeof(record), "|%s,%04o,%lld|",
                            file->name, (unsigned int) (file->mode & 0777), file->size);
+    } else {
+        written = snprintf(record, sizeof(record), "%s,%04o,%lld|",
+                           file->name, (unsigned int) (file->mode & 0777), file->size);
+    }
 
     if (written < 0 || (size_t) written >= sizeof(record)) {
         return -1;
@@ -222,13 +229,13 @@ static int build_archive(int argc, char **argv) {
         }
     }
 
-    if (HEADER_WIDTH + metadata_length > 9999999999ULL) {
+    if (metadata_length > 9999999999ULL) {
         fprintf(stderr, "Organizasyon bolumu cok buyuk!\n");
         free(metadata);
         return 1;
     }
 
-    snprintf(header, sizeof(header), "%010zu", HEADER_WIDTH + metadata_length);
+    snprintf(header, sizeof(header), "%010zu", metadata_length);
     out = fopen(output_path, "wb");
     if (!out) {
         fprintf(stderr, "%s arsiv dosyasi olusturulamadi!\n", output_path);
@@ -327,8 +334,12 @@ static int parse_mode_octal(const char *text, mode_t *mode_out) {
 }
 
 static int parse_metadata(char *metadata, size_t metadata_length, ArchiveEntry entries[], int *count_out) {
-    size_t pos = 0;
+    size_t pos = 1;
     int count = 0;
+
+    if (metadata_length < 2 || metadata[0] != '|' || metadata[metadata_length - 1] != '|') {
+        return -1;
+    }
 
     while (pos < metadata_length) {
         char *name_start;
@@ -339,10 +350,10 @@ static int parse_metadata(char *metadata, size_t metadata_length, ArchiveEntry e
         long long size;
         mode_t mode;
 
-        if (metadata[pos] != '|') {
+        name_start = metadata + pos;
+        if (*name_start == '|') {
             return -1;
         }
-        name_start = metadata + pos + 1;
         comma1 = strchr(name_start, ',');
         if (!comma1) {
             return -1;
@@ -441,35 +452,35 @@ static int extract_archive(int argc, char **argv) {
         }
     }
 
-    if (parse_long_long(header, &section_size) != 0 || section_size < HEADER_WIDTH) {
+    if (parse_long_long(header, &section_size) != 0 || section_size <= 0) {
         printf("Arşiv dosyası uygunsuz veya bozuk!\n");
         fclose(archive);
         return 1;
     }
 
-    if (get_file_size(archive, &archive_size) != 0 || archive_size < section_size) {
+    if (get_file_size(archive, &archive_size) != 0 ||
+        archive_size < HEADER_WIDTH + section_size) {
         printf("Arşiv dosyası uygunsuz veya bozuk!\n");
         fclose(archive);
         return 1;
     }
 
-    metadata = malloc((size_t) (section_size - HEADER_WIDTH) + 1);
+    metadata = malloc((size_t) section_size + 1);
     if (!metadata) {
         fprintf(stderr, "Bellek ayrilamadi!\n");
         fclose(archive);
         return 1;
     }
 
-    if (fread(metadata, 1, (size_t) (section_size - HEADER_WIDTH), archive) !=
-        (size_t) (section_size - HEADER_WIDTH)) {
+    if (fread(metadata, 1, (size_t) section_size, archive) != (size_t) section_size) {
         printf("Arşiv dosyası uygunsuz veya bozuk!\n");
         free(metadata);
         fclose(archive);
         return 1;
     }
-    metadata[section_size - HEADER_WIDTH] = '\0';
+    metadata[section_size] = '\0';
 
-    if (parse_metadata(metadata, (size_t) (section_size - HEADER_WIDTH), entries, &entry_count) != 0) {
+    if (parse_metadata(metadata, (size_t) section_size, entries, &entry_count) != 0) {
         printf("Arşiv dosyası uygunsuz veya bozuk!\n");
         free(metadata);
         fclose(archive);
@@ -486,7 +497,7 @@ static int extract_archive(int argc, char **argv) {
         }
     }
 
-    if (section_size + payload_size != archive_size) {
+    if (HEADER_WIDTH + section_size + payload_size != archive_size) {
         printf("Arşiv dosyası uygunsuz veya bozuk!\n");
         free(metadata);
         fclose(archive);

@@ -1,2 +1,0 @@
-t4.txt dosyasi uzantili bir metin dosyasidir.
-Program uzantiya degil ASCII icerige bakar.

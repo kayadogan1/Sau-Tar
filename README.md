@@ -26,14 +26,6 @@ make
 
 Dizin parametresi verilmezse dosyalar gecerli dizine acilir.
 
-## Test
-
-```sh
-make test
-```
-
-Test hedefi ornek dosyalari arsivler, yeni bir dizine acar ve `diff` ile
-iceriklerin ayni kaldigini dogrular.
 
 ## Notlar
 

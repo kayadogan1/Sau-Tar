@@ -319,6 +319,36 @@ static int mkdir_p(const char *path) {
     return stat(temp, &st) == 0 && S_ISDIR(st.st_mode) ? 0 : -1;
 }
 
+static int build_output_path(char *output_path, size_t output_size,
+                             const char *target_dir, const char *name) {
+    size_t dir_len;
+    size_t name_len = strlen(name);
+    size_t pos = 0;
+    int needs_slash;
+
+    if (strcmp(target_dir, ".") == 0) {
+        if (name_len + 1 > output_size) {
+            return -1;
+        }
+        memcpy(output_path, name, name_len + 1);
+        return 0;
+    }
+
+    dir_len = strlen(target_dir);
+    needs_slash = dir_len > 0 && target_dir[dir_len - 1] != '/';
+    if (dir_len + (size_t) needs_slash + name_len + 1 > output_size) {
+        return -1;
+    }
+
+    memcpy(output_path, target_dir, dir_len);
+    pos = dir_len;
+    if (needs_slash) {
+        output_path[pos++] = '/';
+    }
+    memcpy(output_path + pos, name, name_len + 1);
+    return 0;
+}
+
 static int parse_long_long(const char *text, long long *value_out) {
     char *end = NULL;
     errno = 0;
@@ -523,10 +553,11 @@ static int extract_archive(int argc, char **argv) {
         char output_path[PATH_MAX];
         FILE *out;
 
-        if (strcmp(target_dir, ".") == 0) {
-            snprintf(output_path, sizeof(output_path), "%s", entries[i].name);
-        } else {
-            snprintf(output_path, sizeof(output_path), "%s/%s", target_dir, entries[i].name);
+        if (build_output_path(output_path, sizeof(output_path), target_dir, entries[i].name) != 0) {
+            fprintf(stderr, "%s/%s dosya yolu cok uzun!\n", target_dir, entries[i].name);
+            free(metadata);
+            fclose(archive);
+            return 1;
         }
 
         out = fopen(output_path, "wb");

@@ -12,6 +12,14 @@
 #define HEADER_WIDTH 10
 #define COPY_BUFFER_SIZE 65536
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+#ifndef NAME_MAX
+#define NAME_MAX 255
+#endif
+
 typedef struct {
     char path[PATH_MAX];
     char name[NAME_MAX + 1];
